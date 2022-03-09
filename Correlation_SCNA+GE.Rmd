@@ -1,0 +1,115 @@
+---
+title: "Visualizaion for Cor(Expr, SCNA)"
+author: "Shan Tang"
+output: html_document
+---
+## Set Up
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+library(ComplexHeatmap)
+library(circlize)
+```
+
+## Correlation calculation and data re-organization
+```{r}
+cor_gecnv<-cor(t(as.matrix(ge)), t(as.matrix(cnv)),method = "pearson")
+
+cor_rank<-data.frame(matrix(NA, ncol=3, nrow=nrow(cor_gecnv)))
+colnames(cor_rank)<-c("Gene","Cor","Rank")
+cor_rank$Gene<-rownames(cor_gecnv)
+cor_rank$Cor<-diag(cor_gecnv)
+cor_rank$Rank<-rank(-cor_rank$Cor)
+
+gene_list<-c("COPS3","MYC","CDKN2A","TP53","EGFR","AKT1","PTEN","RB1")
+gene_list2<-c("NADK","BRD4","ATM","PIK3R5","PFAS","TMEM151B", "ENOX1","UBASH3B","CASP1","CHAF1B","DDX10", "IL27RA","PPFIA2", "ARNT", "RAB30","PODNL1","MLLT3","CLEC4A","CARM1", "SCO1", "PCNT")
+
+cor_rank$color<- 'black'
+cor_rank$size  <- 0.25
+cor_rank$color[cor_rank$Gene %in% gene_list] <- 'red'
+cor_rank$size[cor_rank$Gene %in% gene_list] <- 1.5
+cor_rank$color[cor_rank$Gene %in% gene_list2] <- 'blue'
+cor_rank$size[cor_rank$Gene %in% gene_list2] <- 1.5
+```
+
+
+## Heatmap: Cor_Fig1_CNV-GE for OS patient
+```{r cars}
+library(ComplexHeatmap)
+library(circlize)
+
+##Color and Legend
+chr_color = structure(c(sample(col_vec, n)), names = names(gl))
+cor_color <- colorRamp2(c(-1, 0, 1), c("blue", "white", "red"))
+chr<-data.frame(chr=c(1:22),n=rep(0,22))
+temp<-1
+for (i in 1:22) {
+  chr[i,2]<-temp
+  temp=temp+sum(gene_sub1.order$chr==i)
+}
+ha_chr = rowAnnotation(foo = anno_mark(at = chr$n, labels = as.character(c(1:22)),
+                                        side="right",labels_gp = gpar(fontsize = 8) ))
+
+ht_cor<-Heatmap(cor_ge, color = cor_color,
+        heatmap_legend_param = list(title = "Cor", at = c(-0.4,-0.2,0,0.2,0.4), labels = c(-1,-0.5,0,0.5,1)),
+        width = unit(10, "cm"), height = unit(10, "cm"), 
+        cluster_rows = FALSE, cluster_columns = FALSE,
+        show_row_names = FALSE, show_column_names = FALSE)
+
+ht1=draw(ht_cor,heatmap_legend_side = "left")
+```
+
+
+##Ranking view
+```{r}
+rankview<-ggplot(cor_rank) + 
+  geom_point(aes(x=Rank,y=Cor,color=factor(color),size=size),show.legend=F) + 
+  ylab('Correlation')+ xlab('rank') + 
+  scale_color_manual(values=c('red'='red','black'='black','blue'='blue')) +
+  scale_size_area(max_size = 4) + theme(aspect.ratio=1) +
+  geom_text_repel(data = cor_rank[cor_rank$color=="red",],
+                   aes(x=Rank, y=Cor, label=Gene), size = 4.5,
+                   point.padding = 0.2, nudge_x = .15, nudge_y = .15,
+                  segment.linetype = 2, segment.curvature = -1e-20,
+                   arrow = arrow(length = unit(0.022, "npc")) )+
+  geom_text_repel(data = cor_rank[cor_rank$color=="blue",],
+                   aes(x=Rank, y=Cor, label=Gene), size = 4.5,
+                   point.padding = 0.2, nudge_x = -.15, nudge_y = -.15,
+                  segment.linetype = 2, segment.curvature = -1e-20,
+                   arrow = arrow(length = unit(0.022, "npc")) )+
+  geom_hline(yintercept=0, linetype="dashed") +
+  theme(text = element_text(size=18, colour = "black"),
+        plot.title = element_text(size = 21, hjust = 0),
+        axis.text = element_text(colour = "gray10"))+
+  theme(axis.line = element_line(size = 0.5, colour = "black"),
+        panel.grid = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank())
+
+rankview
+```
+
+
+#### Other: Prepare for plot color (Chr)
+```{r}
+#library(ggsci)
+#simulates the chr as a list
+chr_number<-NA
+for(i in 1:22){
+  chr_number[i]<- sum(gene_sub1.order$chr==i)
+}
+gl = lapply(1:22, function(i) {
+    rownames(ge_sub1.order)[sum(chr_number[seq_len(i-1)]) + 1:chr_number[i]]
+})
+names(gl) = paste0("chr", c(1:22))
+
+##convert gl to gd so that it is easy to know the groups given the names of the entity + generate the colors which correspond to the groups
+gd = structure(rep(names(gl), times = sapply(gl, length)), names = unlist(gl))
+n_chr = length(gl)
+#chr_color = structure(circlize::rand_color(22), names = names(gl))
+chr_color = structure(c(sample(col_vec, n)), names = names(gl))
+pie(rep(1,n), col = chr_color)
+```
+

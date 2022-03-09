@@ -1,0 +1,96 @@
+---
+title: "SNF: grouping, prediction and visualization"
+author: "Shan Tang"
+output: html_document
+---
+
+## Set Up
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(SNFtool)
+library(readxl)
+```
+
+## SNF calculation
+
+
+```{r SNF_calc}
+K = 20;    # number of neighbors, usually (10~30)
+alpha = 0.5;    # hyperparameter, usually (0.3~0.8)
+T = 20;   # Number of Iterations, usually (10~20)
+
+## Calculate distance matrices, the pair-wise distance; 
+## If the data is continuous, we recommend to use the function "dist2" as follows 
+dist_cnv = (SNFtool::dist2(as.matrix(cnv),as.matrix(cnv)))^(1/2)
+dist_ge = (SNFtool::dist2(as.matrix(ge),as.matrix(ge)))^(1/2)
+dist_methy = (SNFtool::dist2(as.matrix(methy),as.matrix(methy)))^(1/2)
+
+## next, construct similarity graphs, be careful about sequence & sorting
+W_cnv = affinityMatrix(dist_cnv, K, alpha)
+W_ge = affinityMatrix(dist_ge, K, alpha)
+W_methy = affinityMatrix(dist_methy, K, alpha)  
+##for error: dim(X) must have a positive length >> check NAs!
+
+
+##fuse all the graphs, then the overall matrix can be computed by SNF:
+W = SNF(list(W_cnv,W_ge,W_methy), K, T)
+
+#grouping
+C = 3 								# number of clusters
+group = spectralClustering(W,C); # the final subtypes information
+
+ind = sort(as.vector(group),index.return=TRUE)
+W_group<-W[ind$ix,ind$ix]
+```
+
+## SNF prediction
+
+
+```{r SNF_pre}
+## Group Prediction
+#groupPredict <- function(train, test, groups, K=20, alpha=0.5, t=20, method=1)
+SNFgroup_pre<-groupPredict(list(as.matrix(cnv_training),as.matrix(ge_training)), list(as.matrix(cnv_validation),as.matrix(ge_validation)), SNFgroup_training, K=20,alpha=0.5,t=20, method=1)
+```
+
+## Visulization - 
+```{r Vis}
+## Simple version
+displayClustersWithHeatmap(W, spectralClustering(W, K = 3))
+displayClusters(W, group)
+
+## Using ComplexHeatmap
+library(ComplexHeatmap)
+library(circlize)
+library(ggplot2)
+
+##legend
+sample_group<-sample_infor[match(colnames(W_group),sample_infor$sample),]
+ha_col = HeatmapAnnotation(df=data.frame(Type=sample_group$type,
+                DrugResp=sample_group$dr,
+                Metastasis=sample_group$Metastasis,
+                VitalStatus=sample_group$Status),
+    col = list(Type = c("Patient"="#56B4E9","Cell line"="#CC79A7", "SaOS2"="red"),
+               DrugResp=c("Good responder" = "#009E73", "Poor responder"="#E69F00"),
+               Metastasis= c("Non-metastatic"="#999999", "Metastatic"="#000000"),
+               VitalStatus=c("Alive"="#999999", "Dead"="#000000") ),
+    height = unit(1.25, "cm"), simple_anno_size_adjust = TRUE, 
+    annotation_name_rot = 30)
+
+##heatmap
+col_blankblue<-circlize::colorRamp2(c(0,0.5), c("black", "steelblue1"))
+ht_w= ComplexHeatmap::Heatmap(as.matrix(W_group), 
+        col = col_blankblue,
+        width = unit(12, "cm"), height = unit(12, "cm"),
+        show_row_names = FALSE, show_column_names = FALSE, #column_names_gp = grid::gpar(fontsize = 9), 
+        #name = "Similarity", 
+        row_split = ind$x, column_split =ind$x,
+        cluster_rows = FALSE, cluster_columns = FALSE, 
+        top_annotation = ha_col
+        )
+ht=draw(ht_w,heatmap_legend_side = "right",annotation_legend_side = "right")
+
+#pdf("SNF_similarity.pdf")  #  Create a plot
+#ht=draw(ht_w,heatmap_legend_side = "left",annotation_legend_side = "right") # Close the pdf file
+#dev.off()
+```
+

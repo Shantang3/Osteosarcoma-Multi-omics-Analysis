@@ -1,0 +1,88 @@
+---
+title: "Plots_Manhattan, Sruvival etc."
+author: "Shan Tang"
+output: html_document
+---
+## Set Up
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggrepel)
+library(ggplot2)
+require("survival")
+library("survminer")
+library(ggpubr)
+```
+
+## Manhattan
+```{r} 
+temp<-ge ### can be SCNA, expr, or methy
+temp<-temp[temp$chr %in% c(1:22),]
+
+temp$hilight<-0
+temp$hilight[temp$GeneSymbol %in% gene_list]<-"yes"  ## need to pre-define gene-list
+temp$hilight[temp$hilight==0]<-"no"
+
+temp$ind<-0
+temp<-temp[order(temp$chr, temp$Start),]
+for (i in 1:22) {
+  nn<-nrow(temp[temp$chr==i,])
+  temp$ind[temp$chr==i]<-1:nn
+}
+
+temp<-temp %>% 
+  group_by(chr) %>% 
+  summarise(chr_len=max(ind)) %>% # Compute chromosome size
+  mutate(tot=cumsum(chr_len)-chr_len) %>%
+  select(-chr_len) %>% # Calculate cumulative position of each chromosome
+  left_join(temp, ., by=c("chr"="chr")) %>%
+  arrange(chr, ind) %>%
+  mutate(indcum=ind+tot)
+
+axisdf = temp %>% group_by(chr) %>% summarize(center=( max(indcum) + min(indcum) ) / 2 )
+
+mht<-ggplot(temp, aes(x=indcum, y=-log10(pval))) +
+    geom_point( aes(color=as.factor(chr)), size=1.3,alpha=0.75) +
+    scale_color_manual(values = rep(c("grey21","steelblue3"), 22 )) +
+    geom_point(data=subset(temp, hilight=="yes"), aes(x=indcum,y=-log10(pval)), color="red", shape=13, size=2) +
+    scale_x_continuous( label = axisdf$chr, breaks= axisdf$center,guide=guide_axis(n.dodge=2)) +  #, breaks= axisdf$center
+    #scale_y_continuous(expand = c(0, 0) ) +     # remove space between plot area and x axis
+    xlab("Chr") + 
+    geom_hline(yintercept=-log10(0.05/12000), linetype="dashed", color = "red") +
+    #geom_point(data=cnv_sub, color="orange", size=2) + # Add highlighted points
+    #geom_label_repel( data=cnv_sub, aes(label=hgnc_symbol), size=2) +   # Add label using ggrepel to avoid overlapping
+    # Custom the theme:
+    theme_bw() +
+    theme( 
+      legend.position="none",
+      panel.border = element_blank(),
+      panel.grid.major.x = element_blank(),panel.grid.minor.x = element_blank()
+    )+
+    theme(legend.text = element_text(size = 19, color = "black"),
+          axis.title.x =  element_text(size = 19, color = "black"),
+          axis.title.y =  element_text(size = 19, color = "black"),
+          axis.text=element_text(size = 11, color = "black"),
+          plot.title = element_text(size=21))
+mht
+```
+
+
+## Survival plot
+```{r surv}
+fit<- survfit(Surv(SurvivalDays, Death) ~ SNF_group, sample_infor)
+
+ggsurv<-ggsurvplot(fit =fit, sample_infor,
+           palette = c("steelblue", "#F03442","#CC79A7"),  #"1"="steelblue", "2"="#F03442","3"="#CC79A7"
+           pval = TRUE, #conf.int = TRUE, 
+           legend="right",legend.title = "SNFgroup",
+           xlab = "Time/days", title = "Survival Plot (training set)", 
+           ggtheme = theme_light())
+
+ggsurv$plot <- ggsurv$plot + 
+    theme(legend.text = element_text(size = 19, color = "black"),
+          axis.title.x =  element_text(size = 19, color = "black"),
+          axis.title.y =  element_text(size = 19, color = "black"),
+          axis.text=element_text(size = 19, color = "black"),
+          plot.title = element_text(size=21))
+ggsurv
+```
+
