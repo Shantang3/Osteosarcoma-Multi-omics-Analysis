@@ -1,6 +1,6 @@
 # Osteosarcoma-Multi-omics-Analysis
 
-This repository includes the data analysis and visulization for the research paper "Osteosarcoma multi-omics landscape and subtypes":
+This repository includes the code for data analysis and visulization from the research paper "Osteosarcoma multi-omics landscape and subtypes":
 
 Samilarity_Network_Fushion.Rmd: SNF analysis and visualization(Fig.1A, Fig.1B).
 
